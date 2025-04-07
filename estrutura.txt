@@ -1,0 +1,21 @@
+justino/
+├── src/
+│   ├── whatsapp/
+│   │   ├── connect.js          # Lógica de conexão com o WhatsApp
+│   │   ├── messageHandler.js   # Processamento de mensagens recebidas
+│   │   ├── queueManager.js     # Integração com Redis para filas
+│   ├── services/
+│   │   ├── db.js               # Conexão com MySQL/MongoDB
+│   │   ├── redis.js            # Conexão com Redis
+│   ├── utils/
+│   │   ├── logger.js           # Funções de log
+│   │   ├── helpers.js          # Funções auxiliares
+├── instances/
+│   ├── instance-1/             # Pasta para a instância 1
+│   │   ├── auth_info_baileys/  # Autenticação da instância 1
+│   ├── instance-2/             # Pasta para a instância 2
+│   │   ├── auth_info_baileys/  # Autenticação da instância 2
+├── ecosystem.config.js         # Configuração do PM2
+├── docker-compose.yml          # Configuração dos containers
+├── Dockerfile                  # Configuração do container do bot
+├── .env                        # Variáveis de ambiente

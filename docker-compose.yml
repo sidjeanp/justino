@@ -1,0 +1,80 @@
+version: '3.8'
+
+# Variáveis globais
+x-common-variables: &common-variables
+  TZ: America/Sao_Paulo
+
+services:
+  app:
+    build: .
+    environment:
+      <<: *common-variables # Aplica o fuso horário global
+      NODE_ENV: development # Define o ambiente como desenvolvimento
+    ports:
+      - "3000:3000" # Mapeia a porta 3000 do container para a porta 3000 do host
+    volumes:
+      - .:/app # Monta o diretório local no container
+      - ./instances:/app/instances
+    depends_on:
+      - mysql # Garante que o MySQL inicie antes da aplicação
+      - mongo # Garante que o MongoDB inicie antes da aplicação
+      - redis # Garante que o Redis inicie antes da aplicação
+    command: pm2-runtime ecosystem.config.js # Define o comando para iniciar a aplicação com PM2
+
+  mysql:
+    image: mysql:9.2 # Versão estável do MySQL
+    environment:
+      <<: *common-variables # Aplica o fuso horário global
+      MYSQL_ROOT_PASSWORD: rootpassword # Senha do usuário root do MySQL
+      MYSQL_DATABASE: justino # Nome do banco de dados
+      MYSQL_USER: user # Usuário do banco de dados
+      MYSQL_PASSWORD: password # Senha do usuário do banco de dados
+      MYSQL_REQUIRE_SECURE_TRANSPORT: "OFF"
+    ports:
+      - "3306:3306" # Mapeia a porta 3306 do container para a porta 3306 do host
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5      
+    volumes:
+      - ./mysql-data:/var/lib/mysql # Persiste os dados do MySQL
+      - ./my.cnf:/etc/my.cnf # Configuração personalizada do MySQL
+    command: --pid-file=/var/run/mysqld/mysqld.pid
+
+  mongo:
+    image: mongo:8.0.6 # Versão específica do MongoDB
+#    entrypoint: ["/docker/mongo/scripts/mongo-entrypoint.sh", "mongod"]
+    volumes:
+      - ./docker/mongo/scripts:/docker/mongo/scripts
+      - mongo-data:/data/db # Persiste os dados do MongoDB
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js # Script de inicialização
+    environment:
+      <<: *common-variables # Aplica o fuso horário global
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    cap_add:
+      - SYS_NICE
+    command: >
+      mongod --auth 
+    ports:
+      - "27017:27017" # Mapeia a porta 27017 do container para a porta 27017 do host
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
+      retries: 5   
+      interval: 10s
+      timeout: 5s
+
+  redis:
+    image: redis:7.0 # Versão estável do Redis
+    environment:
+      <<: *common-variables # Aplica o fuso horário global
+    ports:
+      - "6379:6379" # Mapeia a porta 6379 do container para a porta 6379 do host
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+
+volumes:
+  mysql-data: # Volume para persistir os dados do MySQL
+  mongo-data: # Volume para persistir os dados do MongoDB

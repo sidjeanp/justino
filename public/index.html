@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clientes</title>
+  <style>
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    table, th, td {
+      border: 1px solid black;
+    }
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <h1>Clientes Cadastrados</h1>
+  <table id="customersTable">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nome</th>
+        <th>Telefone</th>
+        <th>Permitir IA</th>
+        <th>Resumo</th>
+        <th>Próxima Instrução</th>
+        <th>Instrução Permanente</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Dados serão carregados aqui -->
+    </tbody>
+  </table>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const response = await fetch('/api/customers');
+      const customers = await response.json();
+
+      const tbody = document.querySelector('#customersTable tbody');
+      tbody.innerHTML = '';
+
+      customers.forEach(customer => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${customer.customer_id}</td>
+          <td><input value="${customer.name}" data-id="${customer.id}" data-field="name"></td>
+          <td><input value="${customer.phone_number}" data-id="${customer.id}" data-field="phone_number"></td>
+          <td><input type="checkbox" ${customer.allow_ai_interaction ? 'checked' : ''} data-id="${customer.id}" data-field="allow_ai_interaction"></td>
+          <td><textarea data-id="${customer.id}" data-field="summary">${customer.summary}</textarea></td>
+          <td><textarea data-id="${customer.id}" data-field="next_contact_instructions">${customer.next_contact_instructions}</textarea></td>
+          <td><textarea data-id="${customer.id}" data-field="permanent_instruction">${customer.permanent_instruction}</textarea></td>
+          <td><button onclick="saveChanges(${customer.id})">Salvar</button></td>
+        `;
+        tbody.appendChild(row);
+      });
+    });
+
+    async function saveChanges(id) {
+      const inputs = document.querySelectorAll(`[data-id="${id}"]`);
+      const updates = {};
+
+      inputs.forEach(input => {
+        const field = input.dataset.field;
+        if (input.type === 'checkbox') {
+          updates[field] = input.checked;
+        } else {
+          updates[field] = input.value;
+        }
+      });
+
+      await fetch(`/api/customers/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+
+      alert('Alterações salvas com sucesso!');
+    }
+  </script>
+</body>
+</html>
