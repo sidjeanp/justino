@@ -10,15 +10,23 @@ services:
     environment:
       <<: *common-variables # Aplica o fuso horário global
       NODE_ENV: development # Define o ambiente como desenvolvimento
+      MYSQL_HOST: mysql # Host do MySQL no Docker Compose
+      MYSQL_USER: user # Usuário do MySQL
+      MYSQL_PASSWORD: password # Senha do usuário do MySQL
+      MYSQL_DATABASE: justino # Nome do banco de dados
     ports:
       - "3000:3000" # Mapeia a porta 3000 do container para a porta 3000 do host
     volumes:
       - .:/app # Monta o diretório local no container
       - ./instances:/app/instances
+      - ./config:/app/src/config
     depends_on:
-      - mysql # Garante que o MySQL inicie antes da aplicação
-      - mongo # Garante que o MongoDB inicie antes da aplicação
-      - redis # Garante que o Redis inicie antes da aplicação
+      mongo:
+        condition: service_started # Garante que o MongoDB inicie antes da aplicação
+      redis:
+        condition: service_started # Garante que o Redis inicie antes da aplicação
+      mysql:
+        condition: service_healthy # Aguarda até que o MySQL esteja saudável     
     command: pm2-runtime ecosystem.config.js # Define o comando para iniciar a aplicação com PM2
 
   mysql:
@@ -44,9 +52,9 @@ services:
 
   mongo:
     image: mongo:8.0.6 # Versão específica do MongoDB
-#    entrypoint: ["/docker/mongo/scripts/mongo-entrypoint.sh", "mongod"]
     volumes:
       - ./docker/mongo/scripts:/docker/mongo/scripts
+      - ./docker/mongo/mongod.conf:/etc/mongod.conf # Configuração personalizada do MongoDB
       - mongo-data:/data/db # Persiste os dados do MongoDB
       - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js # Script de inicialização
     environment:
@@ -56,7 +64,7 @@ services:
     cap_add:
       - SYS_NICE
     command: >
-      mongod --auth 
+      mongod --config /etc/mongod.conf --auth
     ports:
       - "27017:27017" # Mapeia a porta 27017 do container para a porta 27017 do host
     healthcheck:

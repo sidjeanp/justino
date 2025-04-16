@@ -1,9 +1,6 @@
 // models/index.js
-'use strict';
-
-// Importa as dependências necessárias
-const fs = require('fs'); // Para ler arquivos no diretório
-const path = require('path'); // Para manipular caminhos de arquivos
+const fs = require('fs');
+const path = require('path');
 const Sequelize = require('sequelize'); // Biblioteca Sequelize para interação com o banco de dados
 const process = require('process'); // Para acessar variáveis de ambiente
 
@@ -31,27 +28,24 @@ if (config.use_env_variable) {
 
 // Lê todos os arquivos no diretório `models`
 fs
-  .readdirSync(__dirname) // Lista todos os arquivos no diretório atual
+  .readdirSync(__dirname)
   .filter(file => {
-    // Filtra apenas os arquivos que são modelos válidos
     return (
-      file.indexOf('.') !== 0 && // Ignora arquivos ocultos (ex.: .gitignore)
+      file.indexOf('.') !== 0 && // Ignora arquivos ocultos
       file !== basename && // Ignora o próprio arquivo index.js
       file.slice(-3) === '.js' && // Aceita apenas arquivos com extensão .js
-      file.indexOf('.test.js') === -1 // Ignora arquivos de teste (ex.: model.test.js)
+      file.indexOf('.test.js') === -1 // Ignora arquivos de teste
     );
   })
   .forEach(file => {
-    // Importa cada modelo e o adiciona ao objeto `db`
-    const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes);
-    db[model.name] = model; // Armazena o modelo pelo nome no objeto `db`
+    const model = require(path.join(__dirname, file))(sequelize); // Passa a instância do Sequelize
+    db[model.name] = model;
   });
 
 // Define os relacionamentos entre os modelos
 Object.keys(db).forEach(modelName => {
   if (db[modelName].associate) {
-    // Se o modelo tiver um método `associate`, chama-o passando todos os modelos
-    db[modelName].associate(db);
+    db[modelName].associate(db); // Passa todos os modelos para a função associate
   }
 });
 

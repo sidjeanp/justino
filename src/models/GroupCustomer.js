@@ -1,6 +1,8 @@
 // models/GroupCustomer.js
 
-module.exports = (sequelize, DataTypes) => {
+const { Model, DataTypes } = require('sequelize');
+
+module.exports = (sequelize) => {
   const GroupCustomer = sequelize.define('GroupCustomer', {
     allow_ai_interaction: { 
       type: DataTypes.BOOLEAN, 

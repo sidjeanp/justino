@@ -1,70 +1,124 @@
 // ./src/database/db.js
-
 const { Sequelize } = require('sequelize');
+const logger = require('../../utils/logger');
 
-// Função para formatar data e hora
-function getFormattedDateTime() {
-    const now = new Date();
-    const date = now.toLocaleDateString('pt-BR');
-    const time = now.toLocaleTimeString('pt-BR');
-    return `${date} ${time}`;
+if (!process.env.MYSQL_HOST) {
+  logger.error('Variável de ambiente MYSQL_HOST é obrigatória.');
+  process.exit(1);
+}
+if (!process.env.MYSQL_USER) {
+  logger.error('Variável de ambiente MYSQL_USER é obrigatória.');
+  process.exit(1);
+}
+if (!process.env.MYSQL_PASSWORD) {
+  logger.error('Variável de ambiente MYSQL_PASSWORD é obrigatória.');
+  process.exit(1);
 }
 
-// Configuração da conexão com o MySQL
-const sequelize = new Sequelize('justino', 'user', 'password', {
-    host: process.env.MYSQL_HOST || 'mysql',
-    port: process.env.MYSQL_PORT || 3306,
-    dialect: 'mysql',
+const sequelize = new Sequelize(process.env.MYSQL_DATABASE, process.env.MYSQL_USER, process.env.MYSQL_PASSWORD, {
+  host: process.env.MYSQL_HOST,
+  port: process.env.MYSQL_PORT ? parseInt(process.env.MYSQL_PORT, 10) : 3306,
+  dialect: 'mysql',
+  dialectOptions: {
+    connectTimeout: 10000,
+  },
 });
 
-// Importação dos modelos
-const Group = require('../models/Group')(sequelize); // Ajuste conforme a estrutura dos seus modelos
-const Customer = require('../models/Customer')(sequelize);
+async function connectToDatabase() {
+  const maxRetries = 10;
+  const retryInterval = 5000;
 
-// Testar conexão
-(async () => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-        await sequelize.authenticate();
-        console.log('Conexão com o MySQL estabelecida com sucesso.');
+      logger.info(`Tentativa ${attempt} de ${maxRetries}: Conectando ao MySQL...`);
+      await sequelize.authenticate();
+      logger.info('Conexão com o MySQL estabelecida com sucesso.');
+      return;
     } catch (error) {
-        console.error('Erro ao conectar ao MySQL:', error.message);
-        process.exit(1); // Encerra o processo se houver erro
+      logger.error(`Erro ao conectar ao MySQL (tentativa ${attempt}): ${error.message}`);
+      if (attempt === maxRetries) {
+        logger.error(`Falha ao conectar ao MySQL após ${maxRetries} tentativas.`);
+        process.exit(1);
+      }
+      await new Promise((resolve) => setTimeout(resolve, retryInterval));
     }
-})();
+  }
+}
 
-// Função para salvar um grupo no banco de dados
+const { Group, Customer, GroupCustomer } = require('../models');
+
 async function saveGroupToDatabase(groupData) {
-    try {
-        const existingGroup = await Group.findOne({ where: { group_id: groupData.group_id } });
-        if (!existingGroup) {
-            await Group.create(groupData);
-            console.log(`[${getFormattedDateTime()}] Grupo salvo no banco de dados:`, groupData.name);
-        } else {
-            console.log(`[${getFormattedDateTime()}] Grupo já existe no banco de dados:`, groupData.name);
-        }
-    } catch (error) {
-        console.error(`[${getFormattedDateTime()}] Erro ao salvar grupo no banco de dados:`, error.message);
+  try {
+    if (!groupData.group_id || !groupData.name) {
+      throw new Error("Os campos 'group_id' e 'name' são obrigatórios.");
     }
+
+    const existingGroup = await Group.findOne({ where: { group_id: groupData.group_id } });
+    if (!existingGroup) {
+      await Group.create(groupData);
+      logger.info(`Grupo salvo no banco de dados: ${groupData.name}`);
+    } else {
+      logger.info(`Grupo já existe no banco de dados: ${groupData.name}`);
+    }
+  } catch (error) {
+    logger.error(`Erro ao salvar grupo no banco de dados: ${error.message}`);
+  }
 }
 
-// Função para salvar um participante no banco de dados
 async function saveParticipantToDatabase(participantData) {
-    try {
-        const existingParticipant = await Customer.findOne({ where: { participant_id: participantData.participant_id } });
-        if (!existingParticipant) {
-            await Customer.create(participantData);
-            console.log(`[${getFormattedDateTime()}] Participante salvo no banco de dados:`, participantData.name);
-        } else {
-            console.log(`[${getFormattedDateTime()}] Participante já existe no banco de dados:`, participantData.name);
-        }
-    } catch (error) {
-        console.error(`[${getFormattedDateTime()}] Erro ao salvar participante no banco de dados:`, error.message);
+  try {
+    if (!participantData.participant_id || !participantData.name) {
+      throw new Error("Os campos 'participant_id' e 'name' são obrigatórios.");
     }
+
+    const phoneNumber = participantData.participant_id.split('@')[0];
+    participantData.phone_number = phoneNumber;
+
+    const existingParticipant = await Customer.findOne({ where: { participant_id: participantData.participant_id } });
+    
+    if (!existingParticipant) {
+      await Customer.create(participantData);
+      logger.info(`Participante salvo no banco de dados: ${participantData.name}`);
+    } else {
+      logger.info(`Participante já existe no banco de dados: ${participantData.name}`);
+    }
+  } catch (error) {
+    logger.error(`Erro ao salvar participante no banco de dados: ${error.message}`);
+  }
 }
 
-// Exportação correta
+async function associateParticipantToGroup(participantId, groupId) {
+  try {
+    const participant = await Customer.findOne({ where: { id: participantId } });
+    const group = await Group.findOne({ where: { id: groupId } });
+
+    if (!participant || !group) {
+      logger.error('Participante ou grupo não encontrado.');
+      return;
+    }
+
+    const [association, created] = await GroupCustomer.findOrCreate({
+      where: { customerId: participant.id, groupId: group.id },
+      defaults: { allow_ai_interaction: true },
+    });
+
+    if (created) {
+      logger.info(`Participante associado ao grupo: ${participant.name} -> ${group.name}`);
+    } else {
+      logger.info(`Participante já associado ao grupo: ${participant.name} -> ${group.name}`);
+    }
+  } catch (error) {
+    logger.error(`Erro ao associar participante ao grupo: ${error.message}`);
+  }
+}
+
 module.exports = {
-    sequelize,
-    saveGroupToDatabase,
-    saveParticipantToDatabase
+  sequelize,
+  saveGroupToDatabase,
+  saveParticipantToDatabase,
+  associateParticipantToGroup,
 };
+
+(async () => {
+  await connectToDatabase();
+})();

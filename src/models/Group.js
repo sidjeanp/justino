@@ -37,5 +37,10 @@ module.exports = (sequelize) => {
       tableName: 'groups' // Nome exato da tabela no banco de dados
     }
   );
+
+  Group.associate = function (models) {
+    Group.hasMany(models.GroupCustomer, { foreignKey: 'group_id' });
+  };
+    
   return Group;
 };

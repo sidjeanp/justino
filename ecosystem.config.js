@@ -2,7 +2,7 @@
 module.exports = {
   apps: [
     {
-      name: 'whatsapp-bot-instance-1',
+      name: 'justino-instance-1',
       script: './src/whatsapp/connect.js', // Caminho correto para o script principal
       args: '/app/instances/instance-1/auth_info_baileys', // Pasta de autenticação exclusiva
       env: {
