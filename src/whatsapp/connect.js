@@ -38,14 +38,16 @@ async function processMessage(msg) {
                     summary: `Grupo identificado como ${groupName}.`,
                 });
 
+                let participant = {
+                                    customer_id: sender,
+                                    participant_id: sender,
+                                    name: senderName,
+                                    allow_ai_interaction: true, // Define se a IA pode interagir com o participante
+                                   // group_id: remoteJid,
+                                };
+                   
                 // Salva o participante no banco de dados
-                await saveParticipantToDatabase({
-                    customer_id: sender,
-                    participant_id: sender,
-                    name: senderName,
-                    allow_ai_interaction: true, // Define se a IA pode interagir com o participante
-                    group_id: remoteJid,
-                });
+                await saveParticipantToDatabase(participant);
 
                 // Associa o participante ao grupo
                 await associateParticipantToGroup(sender, remoteJid);
@@ -55,14 +57,16 @@ async function processMessage(msg) {
             }
         } else {
             logger.info(`Mensagem recebida em conversa individual: ${remoteJid} | ${senderName}`);
+            
+            let participant = {
+                                customer_id: sender,
+                                participant_id: sender,
+                                name: senderName,
+                                allow_ai_interaction: true,
+                            };
 
             // Salva o usuário no banco de dados (se ainda não existir)
-            await saveParticipantToDatabase({
-                customer_id: sender,
-                participant_id: sender,
-                name: senderName,
-                allow_ai_interaction: true,
-            });
+            await saveParticipantToDatabase(participant);
         }
 
         // Processa o conteúdo da mensagem

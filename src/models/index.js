@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const Sequelize = require('sequelize'); // Biblioteca Sequelize para interação com o banco de dados
 const process = require('process'); // Para acessar variáveis de ambiente
+require('dotenv').config();
 
 // Nome do arquivo atual (index.js)
 const basename = path.basename(__filename);
@@ -10,21 +11,20 @@ const basename = path.basename(__filename);
 // Determina o ambiente (development, test, production)
 const env = process.env.NODE_ENV || 'development';
 
-// Carrega a configuração do banco de dados com base no ambiente
-const config = require(__dirname + '/../config/config.json')[env];
-
 // Objeto que armazenará todos os modelos
 const db = {};
 
-// Cria uma instância do Sequelize com base na configuração
-let sequelize;
-if (config.use_env_variable) {
-  // Se usar variáveis de ambiente para configurar o banco de dados
-  sequelize = new Sequelize(process.env[config.use_env_variable], config);
-} else {
-  // Caso contrário, usa as configurações diretas do arquivo JSON
-  sequelize = new Sequelize(config.database, config.username, config.password, config);
-}
+// Cria uma instância do Sequelize com base nas variáveis de ambiente
+const sequelize = new Sequelize(
+  process.env.MYSQL_DATABASE,
+  process.env.MYSQL_USER,
+  process.env.MYSQL_PASSWORD,
+  {
+    host: process.env.MYSQL_HOST,
+    port: process.env.MYSQL_PORT ? parseInt(process.env.MYSQL_PORT, 10) : 3306,
+    dialect: 'mysql',
+  }
+);
 
 // Lê todos os arquivos no diretório `models`
 fs
@@ -51,7 +51,7 @@ Object.keys(db).forEach(modelName => {
 
 // Adiciona a instância do Sequelize e a classe Sequelize ao objeto `db`
 db.sequelize = sequelize; // Instância do Sequelize
-db.Sequelize = Sequelize; // Classe Sequelize para uso em outros lugares
+//db.Sequelize = Sequelize; // Classe Sequelize para uso em outros lugares
 
 // Exporta o objeto `db` para ser usado em outros arquivos
 module.exports = db;

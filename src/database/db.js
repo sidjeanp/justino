@@ -66,31 +66,48 @@ async function saveGroupToDatabase(groupData) {
 }
 
 async function saveParticipantToDatabase(participantData) {
-  try {
-    if (!participantData.participant_id || !participantData.name) {
-      throw new Error("Os campos 'participant_id' e 'name' são obrigatórios.");
-    }
+    try {
 
-    const phoneNumber = participantData.participant_id.split('@')[0];
-    participantData.phone_number = phoneNumber;
+      logger.info(`Dados do participante recebido:`, JSON.stringify(participantData));
 
-    const existingParticipant = await Customer.findOne({ where: { participant_id: participantData.participant_id } });
-    
-    if (!existingParticipant) {
-      await Customer.create(participantData);
-      logger.info(`Participante salvo no banco de dados: ${participantData.name}`);
-    } else {
-      logger.info(`Participante já existe no banco de dados: ${participantData.name}`);
+      if (!participantData.customer_id || !participantData.name) {
+        throw new Error("Os campos 'customer_id' e 'name' são obrigatórios.");
+      }
+  
+      // Extrai o número de telefone apenas se o formato for válido
+      let phoneNumber = null;
+      if (participantData.customer_id.includes('@')) {
+        phoneNumber = participantData.customer_id.split('@')[0];
+      } else {
+        logger.warn(`Formato inválido para customer_id: ${participantData.customer_id}`);
+      }
+  
+      participantData.phone_number = phoneNumber;  
+      
+      logger.info(`Dados do participante recebido2:`, JSON.stringify(participantData));
+
+  
+      const existingParticipant = await Customer.findOne({ where: { customer_id: participantData.customer_id } });
+      
+      if (!existingParticipant) {
+        await Customer.create(participantData);
+        logger.info(`Participante salvo no banco de dados: ${participantData.name}`);
+      } else {
+        await Customer.update(participantData);
+        logger.info(`Participante já existe no banco de dados: ${participantData.name}`);
+      }
+    } catch (error) {
+      logger.error(`Erro ao salvar participante no banco de dados: ${error.message}`);
     }
-  } catch (error) {
-    logger.error(`Erro ao salvar participante no banco de dados: ${error.message}`);
-  }
 }
 
 async function associateParticipantToGroup(participantId, groupId) {
   try {
-    const participant = await Customer.findOne({ where: { id: participantId } });
-    const group = await Group.findOne({ where: { id: groupId } });
+    const participant = await Customer.findOne({ where: { customer_id: participantId } });
+    const group = await Group.findOne({ where: { group_id: groupId } });
+
+    logger.info('Localizado participante: ', JSON.stringify(participant));
+    logger.info('Localizado grupo: ', JSON.stringify(group));
 
     if (!participant || !group) {
       logger.error('Participante ou grupo não encontrado.');
@@ -98,7 +115,7 @@ async function associateParticipantToGroup(participantId, groupId) {
     }
 
     const [association, created] = await GroupCustomer.findOrCreate({
-      where: { customerId: participant.id, groupId: group.id },
+      where: { customer_id: participant.id, group_id: group.id },
       defaults: { allow_ai_interaction: true },
     });
 
