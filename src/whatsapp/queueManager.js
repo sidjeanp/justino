@@ -36,7 +36,7 @@ async function addToQueue(message) {
     const queueName = "whatsapp-messages"; // Nome da fila no Redis
     await redisClient.connect(); // Garante que o cliente esteja conectado
     await redisClient.lPush(queueName, JSON.stringify(message)); // Adiciona a mensagem à fila
-    logger.info(`Mensagem adicionada à fila:`, message);
+    logger.info(`Mensagem adicionada à fila:`, JSON.stringify(message));
   } catch (error) {
     logger.error(
       `[${getFormattedDateTime()}] Erro ao adicionar mensagem à fila:`,

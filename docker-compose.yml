@@ -16,6 +16,7 @@ services:
       MYSQL_DATABASE: justino # Nome do banco de dados
     ports:
       - "3000:3000" # Mapeia a porta 3000 do container para a porta 3000 do host
+      - "9229:9229"
     volumes:
       - .:/app # Monta o diretório local no container
       - ./instances:/app/instances

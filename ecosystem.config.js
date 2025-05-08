@@ -5,6 +5,7 @@ module.exports = {
       name: "justino-instance-1",
       script: "./src/whatsapp/connect.js", // Caminho correto para o script principal
       args: "/app/instances/instance-1/auth_info_baileys", // Pasta de autenticação exclusiva
+      node_args: "--inspect=0.0.0.0:9229",
       env: {
         INSTANCE_NAME: "instance-1",
         NODE_ENV: "development",

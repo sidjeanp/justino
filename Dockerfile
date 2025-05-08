@@ -7,6 +7,9 @@ RUN npm install -g pm2
 # Define o diretório de trabalho
 WORKDIR /app
 
+# Copia o código-fonte
+COPY . /app
+
 # Copia os arquivos necessários
 COPY package*.json ./
 RUN npm install --production
@@ -14,11 +17,11 @@ RUN npm install --production
 # Instala o cliente MySQL
 RUN apk add --no-cache mysql-client
 
-# Copia o código-fonte
-COPY . .
-
 # Expõe a porta do servidor
 EXPOSE 3000
+
+# Expõe a porta para debug
+EXPOSE 9229
 
 # Comando para iniciar o servidor
 #CMD ["node", "src/app.js"]

@@ -14,13 +14,16 @@ class ContactGroupService {
         logger.warn('Nenhum contato encontrado para sincronização.');
       } else {
 
+        let participant = {
+          customer_id: jid,
+          participant_id: jid,
+          name: contact.name || jid.split('@')[0],
+          allow_ai_interaction: true, // Define se a IA pode interagir com o participante
+          // group_id: remoteJid,
+        };
+
         for (const [jid, contact] of Object.entries(contacts)) {
-          await saveParticipantToDatabase({
-            customer_id: jid,
-            participant_id: jid,
-            name: contact.name || jid.split('@')[0],
-            allow_ai_interaction: true,
-          });
+          await saveParticipantToDatabase(participant);
 
         }
 

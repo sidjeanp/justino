@@ -1,6 +1,10 @@
 // ./src/database/db.js
+
+require('dotenv').config();
 const { Sequelize } = require("sequelize");
 const logger = require("../../utils/logger");
+const { AudioTemp } = require('../models/AudioTemp'); // Importa o modelo AudioTemp
+
 
 if (!process.env.MYSQL_HOST) {
   logger.error("Variável de ambiente MYSQL_HOST é obrigatória.");
@@ -165,11 +169,66 @@ async function associateParticipantToGroup(participantId, groupId) {
   }
 }
 
+async function saveAudioToMongo(audioMessageId, sender, filePath) {
+  try {
+    const audioData = {
+      audioMessageId,
+      sender,
+      filePath,
+      status: "pending",
+    };
+    await AudioTemp.create(audioData);
+    logger.info(`Áudio salvo no MongoDB com ID: ${audioMessageId}`);
+  } catch (error) {
+    logger.error(`Erro ao salvar áudio no MongoDB: ${error.message}`);
+  }
+}
+
+async function updateTranscriptionInMongo(audioMessageId, transcription) {
+  try {
+    const audio = await AudioTemp.findOneAndUpdate(
+      { audioMessageId },
+      { transcription, status: "transcribed" },
+      { new: true }
+    );
+    if (!audio) {
+      throw new Error("Áudio não encontrado no MongoDB.");
+    }
+    logger.info(`Transcrição atualizada para áudio com ID: ${audioMessageId}`);
+    return audio;
+  } catch (error) {
+    logger.error(`Erro ao atualizar transcrição: ${error.message}`);
+  }
+}
+
+async function saveTranscriptionToDatabase(sender, transcription) {
+  try {
+    const existingParticipant = await Customer.findOne({
+      where: { participant_id: sender },
+    });
+
+    if (!existingParticipant) {
+      throw new Error(`Participante com ID ${sender} não encontrado.`);
+    }
+
+    // Atualiza o resumo do participante com a transcrição
+    existingParticipant.summary = transcription;
+    await existingParticipant.save();
+
+    logger.info(`Transcrição salva para o participante: ${sender}`);
+  } catch (error) {
+    logger.error(`Erro ao salvar transcrição no banco de dados: ${error.message}`);
+  }
+}
+
 module.exports = {
   sequelize,
   saveGroupToDatabase,
   saveParticipantToDatabase,
   associateParticipantToGroup,
+  saveAudioToMongo,
+  updateTranscriptionInMongo,
+  saveTranscriptionToDatabase,
 };
 
 (async () => {

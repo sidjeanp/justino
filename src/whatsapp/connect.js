@@ -1,6 +1,7 @@
 // ./src/whatsapp/connect.js
 
 const logger = require("../../utils/logger"); // Importa o logger
+const path = require('path');
 const {
   useMultiFileAuthState,
   DisconnectReason,
@@ -15,8 +16,14 @@ const {
   saveParticipantToDatabase,
   associateParticipantToGroup,
   saveTranscriptionToDatabase,
+  updateTranscriptionInMongo,
 } = require("../database/db"); // Importa funções para salvar no banco de dados
 const ContactGroupService = require("../services/ContactGroupService");
+const { handleAudioMessage } = require("./audioHandler"); // Importa o manipulador de áudio
+
+const { getConfig } = require(path.join(__dirname, '..', '..', 'config', 'configLoader'));
+
+const zapiaBrasilJid = getConfig("zapia_br_jid");
 
 // Variável global para armazenar a instância do socket
 let sock;
@@ -34,7 +41,30 @@ async function processMessage(msg) {
     const senderName = msg.pushName || sender.split("@")[0];
 
     if (remoteJid.endsWith("@g.us")) {
-      logger.info("Tipo de comunicação: ", remoteJid, " | ", senderName);
+      logger.info("Tipo de comunicação 1: ", remoteJid, " | ", senderName);
+      switch (remoteJid.split("@")[1]) {
+        case "g.us":
+          logger.info("Grupo");
+          break;
+        case "s.whatsapp.net":
+          logger.info("Contato Individual");
+          break;
+        case "broadcast":
+          logger.info("Lista de Transmissão");
+          break;
+        case "newsletter":
+          logger.info("Newsletter");
+          break;
+        case "road":
+          logger.info("Mensagem de Sistema");
+          break;
+        case "status":
+          logger.info("Atualização de Status");
+          break;
+        default:
+          logger.info("Desconhecido");
+          break;
+      }      
 
       try {
         // Obtém os metadados do grupo
@@ -71,7 +101,30 @@ async function processMessage(msg) {
         );
       }
     } else if (remoteJid.endsWith("@s.whatsapp.net")) {
-      logger.info("Tipo de comunicação: ", remoteJid, " | ", senderName);
+      logger.info("Tipo de comunicação 2: ", remoteJid, " | ", senderName);
+      switch (remoteJid.split("@")[1]) {
+        case "g.us":
+          logger.info("Grupo");
+          break;
+        case "s.whatsapp.net":
+          logger.info("Contato Individual");
+          break;
+        case "broadcast":
+          logger.info("Lista de Transmissão");
+          break;
+        case "newsletter":
+          logger.info("Newsletter");
+          break;
+        case "road":
+          logger.info("Mensagem de Sistema");
+          break;
+        case "status":
+          logger.info("Atualização de Status");
+          break;
+        default:
+          logger.info("Desconhecido");
+          break;
+      }      
 
       let participant = {
         customer_id: sender,
@@ -83,7 +136,7 @@ async function processMessage(msg) {
       // Salva o usuário no banco de dados (se ainda não existir)
       await saveParticipantToDatabase(participant);
     } else {
-      logger.info("Tipo de comunicação: ", remoteJid);
+      logger.info("Tipo de comunicação 3: ", remoteJid);
 
       switch (remoteJid.split("@")[1]) {
         case "g.us":
@@ -138,39 +191,12 @@ async function processMessageContent(msg) {
   logger.info(`Conteúdo: ${messageText}`);
 }
 
-// Função para tratar mensagens de áudio
-async function handleAudioMessage(msg) {
-  const audioMessage = msg.message.audioMessage;
-  const sender = msg.key.participant || msg.key.remoteJid;
-
-  logger.info(`Áudio recebido de: ${sender}`);
-
-  // Encaminha o áudio para "Zapia Brasil"
-  const zapiaBrasilJid = "5511987654321@s.whatsapp.net"; // Substitua pelo JID real de "Zapia Brasil"
-
-  try {
-    // Encaminha o áudio
-    await sock.sendMessage(zapiaBrasilJid, {
-      forwardedFrom: msg.key.remoteJid,
-      audio: audioMessage.url, // URL do áudio (ou use o buffer diretamente)
-      mimetype: audioMessage.mimetype,
-      fileName: "audio-transcricao",
-    });
-
-    logger.info(`Áudio encaminhado para Zapia Brasil.`);
-  } catch (error) {
-    logger.error(
-      `Erro ao encaminhar áudio para Zapia Brasil: ${error.message}`
-    );
-  }
-}
-
 // Função para processar a resposta de transcrição de "Zapia Brasil"
 async function handleTranscriptionResponse(msg) {
   const remoteJid = msg.key.remoteJid;
 
   // Verifica se a mensagem é de "Zapia Brasil"
-  const isFromZapiaBrasil = remoteJid === "5511987654321@s.whatsapp.net"; // Substitua pelo JID real
+  const isFromZapiaBrasil = remoteJid === zapiaBrasilJid; // Substitua pelo JID real
   if (!isFromZapiaBrasil) return;
 
   const transcription = msg.message?.conversation;
