@@ -6,16 +6,18 @@ const axios = require("axios");
 const { saveAudioToMongo } = require("../database/db"); // Função para salvar no MongoDB
 const logger = require("../../utils/logger");
 
-// Caminho para a pasta config
-const configDir = path.join('/app/src/config');
+// Caminho absoluto para a pasta config
+const configDir = path.join(__dirname, "..", "..", "config");
+logger.info(`Caminho absoluto para a pasta config: ${configDir}`);
 
-console.log('DirName: ', __dirname);
-console.log('Caminho absoluto: ', configDir);
+// Carrega as configurações
+const { getConfig } = require(path.join(configDir, "configLoader"));
+const zapiaBrasilJid = getConfig("zapia_br_jid");
 
-const { getConfig } = require(path.join(__dirname, '..', '..', 'config', 'configLoader'));
-
-const zapiaBrasilJid = getConfig('zapia_br_jid');
-
+/**
+ * Processa mensagens de áudio.
+ * @param {Object} msg - Mensagem recebida.
+ */
 async function handleAudioMessage(msg) {
   try {
     const audioMessage = msg.message.audioMessage;
@@ -33,7 +35,7 @@ async function handleAudioMessage(msg) {
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
     }
 
-    // Baixa o arquivo de áudio
+    // Baixa e salva o arquivo de áudio
     const audioBuffer = await downloadAudioFile(audioMessage.url);
     fs.writeFileSync(filePath, audioBuffer);
 
@@ -54,10 +56,19 @@ async function handleAudioMessage(msg) {
   }
 }
 
+/**
+ * Baixa o arquivo de áudio.
+ * @param {string} url - URL do arquivo de áudio.
+ * @returns {Buffer} - Buffer do arquivo baixado.
+ */
 async function downloadAudioFile(url) {
-  // Usa o Axios para baixar o arquivo de áudio
-  const response = await axios.get(url, { responseType: "arraybuffer" });
-  return Buffer.from(response.data);
+  try {
+    const response = await axios.get(url, { responseType: "arraybuffer" });
+    return Buffer.from(response.data);
+  } catch (error) {
+    logger.error(`Erro ao baixar arquivo de áudio: ${error.message}`);
+    throw error;
+  }
 }
 
 module.exports = { handleAudioMessage };

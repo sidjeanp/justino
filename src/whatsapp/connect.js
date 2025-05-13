@@ -1,7 +1,7 @@
 // ./src/whatsapp/connect.js
 
-const logger = require("../../utils/logger"); // Importa o logger
-const path = require('path');
+const logger = require("../../utils/logger");
+const path = require("path");
 const {
   useMultiFileAuthState,
   DisconnectReason,
@@ -16,151 +16,36 @@ const {
   saveParticipantToDatabase,
   associateParticipantToGroup,
   saveTranscriptionToDatabase,
-  updateTranscriptionInMongo,
-} = require("../database/db"); // Importa funções para salvar no banco de dados
-const ContactGroupService = require("../services/ContactGroupService");
-const { handleAudioMessage } = require("./audioHandler"); // Importa o manipulador de áudio
+} = require("../database/db");
+const { handleAudioMessage } = require("./audioHandler");
 
-const { getConfig } = require(path.join(__dirname, '..', '..', 'config', 'configLoader'));
-
+// Carrega as configurações
+const { getConfig } = require(path.join(__dirname, "..", "..", "config", "configLoader"));
 const zapiaBrasilJid = getConfig("zapia_br_jid");
 
-// Variável global para armazenar a instância do socket
+// Variáveis globais
 let sock;
-
-// Variável de controle para reconexões
 let isReconnecting = false;
 
-// Função para processar mensagens
+/**
+ * Processa mensagens recebidas.
+ * @param {Object} msg - Mensagem recebida.
+ */
 async function processMessage(msg) {
   try {
-    logger.info("Processando mensagem.");
-
     const remoteJid = msg.key.remoteJid;
     const sender = msg.key.participant || remoteJid;
     const senderName = msg.pushName || sender.split("@")[0];
 
+    logger.info(`Processando mensagem de: ${senderName} (${remoteJid})`);
+
+    // Identifica o tipo de comunicação
+    identifyCommunicationType(remoteJid);
+
     if (remoteJid.endsWith("@g.us")) {
-      logger.info("Tipo de comunicação 1: ", remoteJid, " | ", senderName);
-      switch (remoteJid.split("@")[1]) {
-        case "g.us":
-          logger.info("Grupo");
-          break;
-        case "s.whatsapp.net":
-          logger.info("Contato Individual");
-          break;
-        case "broadcast":
-          logger.info("Lista de Transmissão");
-          break;
-        case "newsletter":
-          logger.info("Newsletter");
-          break;
-        case "road":
-          logger.info("Mensagem de Sistema");
-          break;
-        case "status":
-          logger.info("Atualização de Status");
-          break;
-        default:
-          logger.info("Desconhecido");
-          break;
-      }      
-
-      try {
-        // Obtém os metadados do grupo
-        const groupMetadata = await sock.groupMetadata(remoteJid);
-        const groupName = groupMetadata.subject;
-        const groupCode = remoteJid.split("@")[0];
-        logger.info(`Grupo: ${groupName} (Código: ${groupCode})`);
-        logger.info(`Enviada por: ${senderName}`);
-
-        // Salva o grupo no banco de dados
-        await saveGroupToDatabase({
-          group_id: remoteJid,
-          name: groupName,
-          allow_ai_interaction: true, // Define se a IA pode interagir com o grupo
-          summary: `Grupo identificado como ${groupName}.`,
-        });
-
-        let participant = {
-          customer_id: sender,
-          participant_id: sender,
-          name: senderName,
-          allow_ai_interaction: true, // Define se a IA pode interagir com o participante
-          // group_id: remoteJid,
-        };
-
-        // Salva o participante no banco de dados
-        await saveParticipantToDatabase(participant);
-
-        // Associa o participante ao grupo
-        await associateParticipantToGroup(sender, remoteJid);
-      } catch (error) {
-        logger.warn(
-          `Não foi possível obter metadados do grupo: ${error.message}`
-        );
-      }
+      await handleGroupMessage(remoteJid, sender, senderName);
     } else if (remoteJid.endsWith("@s.whatsapp.net")) {
-      logger.info("Tipo de comunicação 2: ", remoteJid, " | ", senderName);
-      switch (remoteJid.split("@")[1]) {
-        case "g.us":
-          logger.info("Grupo");
-          break;
-        case "s.whatsapp.net":
-          logger.info("Contato Individual");
-          break;
-        case "broadcast":
-          logger.info("Lista de Transmissão");
-          break;
-        case "newsletter":
-          logger.info("Newsletter");
-          break;
-        case "road":
-          logger.info("Mensagem de Sistema");
-          break;
-        case "status":
-          logger.info("Atualização de Status");
-          break;
-        default:
-          logger.info("Desconhecido");
-          break;
-      }      
-
-      let participant = {
-        customer_id: sender,
-        participant_id: sender,
-        name: senderName,
-        allow_ai_interaction: true,
-      };
-
-      // Salva o usuário no banco de dados (se ainda não existir)
-      await saveParticipantToDatabase(participant);
-    } else {
-      logger.info("Tipo de comunicação 3: ", remoteJid);
-
-      switch (remoteJid.split("@")[1]) {
-        case "g.us":
-          logger.info("Grupo");
-          break;
-        case "s.whatsapp.net":
-          logger.info("Contato Individual");
-          break;
-        case "broadcast":
-          logger.info("Lista de Transmissão");
-          break;
-        case "newsletter":
-          logger.info("Newsletter");
-          break;
-        case "road":
-          logger.info("Mensagem de Sistema");
-          break;
-        case "status":
-          logger.info("Atualização de Status");
-          break;
-        default:
-          logger.info("Desconhecido");
-          break;
-      }
+      await handleIndividualMessage(sender, senderName);
     }
 
     // Processa o conteúdo da mensagem
@@ -170,7 +55,95 @@ async function processMessage(msg) {
   }
 }
 
-// Função para processar o conteúdo da mensagem
+/**
+ * Identifica o tipo de comunicação com base no JID.
+ * @param {string} remoteJid - ID remoto da mensagem.
+ */
+function identifyCommunicationType(remoteJid) {
+  const type = remoteJid.split("@")[1];
+  switch (type) {
+    case "g.us":
+      logger.info("Grupo");
+      break;
+    case "s.whatsapp.net":
+      logger.info("Contato Individual");
+      break;
+    case "broadcast":
+      logger.info("Lista de Transmissão");
+      break;
+    case "newsletter":
+      logger.info("Newsletter");
+      break;
+    case "road":
+      logger.info("Mensagem de Sistema");
+      break;
+    case "status":
+      logger.info("Atualização de Status");
+      break;
+    default:
+      logger.info("Desconhecido");
+      break;
+  }
+}
+
+/**
+ * Processa mensagens de grupo.
+ * @param {string} remoteJid - ID do grupo.
+ * @param {string} sender - ID do participante.
+ * @param {string} senderName - Nome do participante.
+ */
+async function handleGroupMessage(remoteJid, sender, senderName) {
+  try {
+    const groupMetadata = await sock.groupMetadata(remoteJid);
+    const groupName = groupMetadata.subject;
+
+    logger.info(`Grupo: ${groupName} | Enviada por: ${senderName}`);
+
+    // Salva o grupo no banco de dados
+    await saveGroupToDatabase({
+      group_id: remoteJid,
+      name: groupName,
+      allow_ai_interaction: true,
+      summary: `Grupo identificado como ${groupName}.`,
+    });
+
+    // Salva o participante no banco de dados
+    const participant = {
+      customer_id: sender,
+      participant_id: sender,
+      name: senderName,
+      allow_ai_interaction: true,
+    };
+    await saveParticipantToDatabase(participant);
+
+    // Associa o participante ao grupo
+    await associateParticipantToGroup(sender, remoteJid);
+  } catch (error) {
+    logger.warn(`Não foi possível obter metadados do grupo: ${error.message}`);
+  }
+}
+
+/**
+ * Processa mensagens individuais.
+ * @param {string} sender - ID do remetente.
+ * @param {string} senderName - Nome do remetente.
+ */
+async function handleIndividualMessage(sender, senderName) {
+  const participant = {
+    customer_id: sender,
+    participant_id: sender,
+    name: senderName,
+    allow_ai_interaction: true,
+  };
+
+  // Salva o usuário no banco de dados (se ainda não existir)
+  await saveParticipantToDatabase(participant);
+}
+
+/**
+ * Processa o conteúdo da mensagem.
+ * @param {Object} msg - Mensagem recebida.
+ */
 async function processMessageContent(msg) {
   let messageText = "";
 
@@ -181,7 +154,6 @@ async function processMessageContent(msg) {
   } else if (msg.message?.imageMessage?.caption) {
     messageText = msg.message.imageMessage.caption;
   } else if (msg.message?.audioMessage) {
-    // Trata mensagens de áudio
     await handleAudioMessage(msg);
     return; // Sai após tratar o áudio
   } else {
@@ -191,12 +163,15 @@ async function processMessageContent(msg) {
   logger.info(`Conteúdo: ${messageText}`);
 }
 
-// Função para processar a resposta de transcrição de "Zapia Brasil"
+/**
+ * Processa a resposta de transcrição de "Zapia Brasil".
+ * @param {Object} msg - Mensagem recebida.
+ */
 async function handleTranscriptionResponse(msg) {
   const remoteJid = msg.key.remoteJid;
 
   // Verifica se a mensagem é de "Zapia Brasil"
-  const isFromZapiaBrasil = remoteJid === zapiaBrasilJid; // Substitua pelo JID real
+  const isFromZapiaBrasil = remoteJid === zapiaBrasilJid;
   if (!isFromZapiaBrasil) return;
 
   const transcription = msg.message?.conversation;
@@ -206,8 +181,7 @@ async function handleTranscriptionResponse(msg) {
   }
 
   // Extrai o ID do remetente original (quem enviou o áudio)
-  const originalSender =
-    msg.contextInfo?.participant || msg.contextInfo?.remoteJid;
+  const originalSender = msg.contextInfo?.participant || msg.contextInfo?.remoteJid;
   if (!originalSender) {
     logger.warn(`Não foi possível identificar o remetente original do áudio.`);
     return;
@@ -219,24 +193,22 @@ async function handleTranscriptionResponse(msg) {
       text: `Sua transcrição está pronta:\n\n${transcription}`,
     });
 
-    logger.info(
-      `Transcrição enviada de volta ao remetente original: ${originalSender}`
-    );
+    logger.info(`Transcrição enviada de volta ao remetente original: ${originalSender}`);
 
     // Salva a transcrição no banco de dados
     await saveTranscriptionToDatabase(originalSender, transcription);
-    logger.info(
-      `Transcrição salva no banco de dados para o remetente: ${originalSender}`
-    );
+    logger.info(`Transcrição salva no banco de dados para o remetente: ${originalSender}`);
   } catch (error) {
     logger.error(`Erro ao processar resposta de transcrição: ${error.message}`);
   }
 }
 
-// Função principal para conectar ao WhatsApp
+/**
+ * Conecta ao WhatsApp.
+ * @param {string} authFolder - Pasta de autenticação.
+ */
 async function connectToWhatsApp(authFolder) {
-  // Aguarda 10 segundos para garantir que os bancos estão prontos
-  await new Promise((resolve) => setTimeout(resolve, 10000));
+  await new Promise((resolve) => setTimeout(resolve, 10000)); // Aguarda inicialização dos bancos de dados
 
   if (isReconnecting) {
     logger.info("Já está reconectando. Aguardando...");
@@ -268,8 +240,7 @@ async function connectToWhatsApp(authFolder) {
       if (connection === "close") {
         isReconnecting = false;
         const shouldReconnect =
-          lastDisconnect.error?.output?.statusCode !==
-          DisconnectReason.loggedOut;
+          lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
         logger.error(
           `Conexão fechada: ${
             lastDisconnect.error?.message || "Motivo desconhecido"
@@ -289,11 +260,10 @@ async function connectToWhatsApp(authFolder) {
     sock.ev.on("messages.upsert", async (m) => {
       const msg = m.messages[0];
       if (msg.key.remoteJid && !msg.key.fromMe) {
-        // Verifica se é uma resposta de transcrição
-        if (msg.key.remoteJid === "5511987654321@s.whatsapp.net") {
+        if (msg.key.remoteJid === zapiaBrasilJid) {
           await handleTranscriptionResponse(msg);
         } else {
-          processMessage(msg); // Processa a mensagem recebida
+          await processMessage(msg); // Processa a mensagem recebida
           await addToQueue(msg); // Adiciona a mensagem à fila do Redis
         }
       }
@@ -305,7 +275,7 @@ async function connectToWhatsApp(authFolder) {
   }
 }
 
-// Função para manter o processo ativo
+// Mantém o processo ativo
 async function keepAlive() {
   while (true) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
