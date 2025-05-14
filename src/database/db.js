@@ -73,6 +73,10 @@ async function saveGroupToDatabase(groupData) {
   if (!groupData.group_id || !groupData.name) {
     throw new Error("Os campos 'group_id' e 'name' são obrigatórios.");
   }
+
+  // Define a interação com a IA como FALSE por padrão
+  groupData.allow_ai_interaction = false;
+
   await saveOrUpdate(Group, groupData, "group_id", "Grupo");
 }
 
@@ -103,7 +107,7 @@ async function associateParticipantToGroup(participantId, groupId) {
 
     const [association, created] = await GroupCustomer.findOrCreate({
       where: { customer_id: participant.id, group_id: group.id },
-      defaults: { allow_ai_interaction: true },
+      defaults: { allow_ai_interaction: group.allow_ai_interaction }, // Usa o valor do grupo
     });
 
     logger.info(

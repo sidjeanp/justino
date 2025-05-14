@@ -40,11 +40,17 @@ async function processMessage(msg) {
     logger.info(`Processando mensagem de: ${senderName} (${remoteJid})`);
 
     // Identifica o tipo de comunicação
-    identifyCommunicationType(remoteJid);
+    const communicationType = identifyCommunicationType(remoteJid);
 
-    if (remoteJid.endsWith("@g.us")) {
+    // Processa apenas mensagens de grupo ou privadas
+    if (communicationType !== "Grupo" && communicationType !== "Contato Individual") {
+      logger.info(`Mensagem ignorada: Tipo de comunicação não suportado (${communicationType}).`);
+      return;
+    }
+
+    if (communicationType === "Grupo") {
       await handleGroupMessage(remoteJid, sender, senderName);
-    } else if (remoteJid.endsWith("@s.whatsapp.net")) {
+    } else if (communicationType === "Contato Individual") {
       await handleIndividualMessage(sender, senderName);
     }
 
@@ -58,31 +64,17 @@ async function processMessage(msg) {
 /**
  * Identifica o tipo de comunicação com base no JID.
  * @param {string} remoteJid - ID remoto da mensagem.
+ * @returns {string} - Tipo de comunicação.
  */
 function identifyCommunicationType(remoteJid) {
   const type = remoteJid.split("@")[1];
   switch (type) {
     case "g.us":
-      logger.info("Grupo");
-      break;
+      return "Grupo";
     case "s.whatsapp.net":
-      logger.info("Contato Individual");
-      break;
-    case "broadcast":
-      logger.info("Lista de Transmissão");
-      break;
-    case "newsletter":
-      logger.info("Newsletter");
-      break;
-    case "road":
-      logger.info("Mensagem de Sistema");
-      break;
-    case "status":
-      logger.info("Atualização de Status");
-      break;
+      return "Contato Individual";
     default:
-      logger.info("Desconhecido");
-      break;
+      return "Desconhecido";
   }
 }
 
@@ -103,21 +95,25 @@ async function handleGroupMessage(remoteJid, sender, senderName) {
     await saveGroupToDatabase({
       group_id: remoteJid,
       name: groupName,
-      allow_ai_interaction: true,
+      allow_ai_interaction: false, // Define a interação com a IA como FALSE por padrão
       summary: `Grupo identificado como ${groupName}.`,
     });
 
-    // Salva o participante no banco de dados
-    const participant = {
-      customer_id: sender,
-      participant_id: sender,
-      name: senderName,
-      allow_ai_interaction: true,
-    };
-    await saveParticipantToDatabase(participant);
+    // Verifica se o grupo permite interação com a IA antes de salvar os participantes
+    const group = await Group.findOne({ where: { group_id: remoteJid } });
+    if (group.allow_ai_interaction) {
+      // Salva o participante no banco de dados
+      const participant = {
+        customer_id: sender,
+        participant_id: sender,
+        name: senderName,
+        allow_ai_interaction: true,
+      };
+      await saveParticipantToDatabase(participant);
 
-    // Associa o participante ao grupo
-    await associateParticipantToGroup(sender, remoteJid);
+      // Associa o participante ao grupo
+      await associateParticipantToGroup(sender, remoteJid);
+    }
   } catch (error) {
     logger.warn(`Não foi possível obter metadados do grupo: ${error.message}`);
   }
