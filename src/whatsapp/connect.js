@@ -22,6 +22,7 @@ const { handleAudioMessage } = require("./audioHandler");
 // Carrega as configurações
 const { getConfig } = require(path.join(__dirname, "..", "..", "config", "configLoader"));
 const zapiaBrasilJid = getConfig("zapia_br_jid");
+const privateGroupId = getConfig("private_group_jid"); // Grupo privado para transcrições
 
 // Variáveis globais
 let sock;
@@ -36,6 +37,18 @@ async function processMessage(msg) {
     const remoteJid = msg.key.remoteJid;
     const sender = msg.key.participant || remoteJid;
     const senderName = msg.pushName || sender.split("@")[0];
+
+    // Verifica se a mensagem é do próprio bot
+    if (msg.key.fromMe) {
+      // Ignora mensagens do próprio bot que NÃO começam com '#'
+      if (!msg.message?.conversation?.startsWith("#")) {
+        logger.info(`Mensagem do próprio bot ignorada: Não começa com '#'.`);
+        return;
+      }
+
+      // Processa mensagens do próprio bot que começam com '#'
+      logger.info(`Mensagem do próprio bot detectada: Comando especial (#).`);
+    }
 
     logger.info(`Processando mensagem de: ${senderName} (${remoteJid})`);
 
@@ -191,6 +204,23 @@ async function handleTranscriptionResponse(msg) {
 
     logger.info(`Transcrição enviada de volta ao remetente original: ${originalSender}`);
 
+    // Direciona a transcrição para o grupo privado
+    const groupMetadata = await sock.groupMetadata(originalSender);
+    const groupName = groupMetadata?.subject || "Conversa Privada";
+
+    const formattedMessage = `
+      Transcrição recebida:
+      - Remetente: ${originalSender}
+      - Origem: ${groupName}
+      - Conteúdo: ${transcription}
+    `;
+
+    await sock.sendMessage(privateGroupId, {
+      text: formattedMessage.trim(),
+    });
+
+    logger.info(`Transcrição direcionada para o grupo privado: ${privateGroupId}`);
+
     // Salva a transcrição no banco de dados
     await saveTranscriptionToDatabase(originalSender, transcription);
     logger.info(`Transcrição salva no banco de dados para o remetente: ${originalSender}`);
@@ -255,7 +285,14 @@ async function connectToWhatsApp(authFolder) {
 
     sock.ev.on("messages.upsert", async (m) => {
       const msg = m.messages[0];
-      if (msg.key.remoteJid && !msg.key.fromMe) {
+      if (msg.key.remoteJid) {
+        // Ignora mensagens que começam com '#' (exceto as do próprio bot)
+        if (msg.key.fromMe && !msg.message?.conversation?.startsWith("#")) {
+          logger.info(`Mensagem do próprio bot ignorada: Não começa com '#'.`);
+          return;
+        }
+
+        // Processa mensagens recebidas de outros usuários ou do próprio bot
         if (msg.key.remoteJid === zapiaBrasilJid) {
           await handleTranscriptionResponse(msg);
         } else {
